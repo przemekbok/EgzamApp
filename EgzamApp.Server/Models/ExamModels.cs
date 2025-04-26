@@ -1,28 +1,61 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace EgzamApp.Server.Models
 {
     public class Exam
     {
         public int Id { get; set; }
+        
+        [JsonPropertyName("examTitle")]
         public string ExamTitle { get; set; } = string.Empty;
+        
+        [JsonPropertyName("examDescription")]
         public string ExamDescription { get; set; } = string.Empty;
+        
+        [JsonPropertyName("passingScore")]
         public int PassingScore { get; set; }
+        
+        [JsonPropertyName("timeLimit")]
         public string TimeLimit { get; set; } = string.Empty;
+        
+        [JsonPropertyName("questions")]
         public List<Question> Questions { get; set; } = new List<Question>();
+        
         public string UserId { get; set; } = string.Empty;
+        
         public DateTime UploadDate { get; set; } = DateTime.UtcNow;
     }
 
     public class Question
     {
         public int Id { get; set; }
+        
+        [JsonPropertyName("question")]
+        [JsonPropertyOrder(1)]
         public string QuestionText { get; set; } = string.Empty;
+        
+        [JsonPropertyName("type")]
         public string Type { get; set; } = string.Empty;
+        
+        [JsonPropertyName("options")]
         public List<string> Options { get; set; } = new List<string>();
+        
+        [JsonPropertyName("correctAnswer")]
         public int CorrectAnswer { get; set; }
+        
+        [JsonPropertyName("difficulty")]
         public string Difficulty { get; set; } = string.Empty;
+        
+        [JsonPropertyName("explanation")]
         public string Explanation { get; set; } = string.Empty;
+        
+        [JsonPropertyName("id")]
+        [JsonPropertyOrder(0)]
+        public int ExternalId { get; set; }
+        
+        [JsonIgnore]
+        public int? ExamId { get; set; }
     }
 
     public class UserExam
