@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using EgzamApp.Server.Data;
 using EgzamApp.Server.Models;
 using Microsoft.EntityFrameworkCore;
@@ -20,21 +22,71 @@ namespace EgzamApp.Server.Services
         {
             try
             {
-                // Parse the JSON file
-                var exam = await JsonSerializer.DeserializeAsync<Exam>(fileStream);
+                // Reset stream position
+                if (fileStream.CanSeek)
+                {
+                    fileStream.Position = 0;
+                }
+
+                // Read the entire file content as a string first for debugging
+                string fileContent;
+                using (var reader = new StreamReader(fileStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true))
+                {
+                    fileContent = await reader.ReadToEndAsync();
+                }
+                
+                // Log the first part of the file content for debugging
+                _logger.LogInformation("File content (first 500 chars): {content}", 
+                    fileContent.Length > 500 ? fileContent.Substring(0, 500) + "..." : fileContent);
+                
+                // Reset stream position again
+                if (fileStream.CanSeek)
+                {
+                    fileStream.Position = 0;
+                }
+
+                // Configure JSON serializer options
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    AllowTrailingCommas = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                };
+
+                // Try to deserialize by reading from string directly
+                Exam? exam;
+                try 
+                {
+                    exam = JsonSerializer.Deserialize<Exam>(fileContent, options);
+                    _logger.LogInformation("Deserialized exam from string: {examTitle}", exam?.ExamTitle ?? "null");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error deserializing exam from string");
+                    return new ExamUploadResult
+                    {
+                        Success = false,
+                        Message = "JSON deserialization error: " + ex.Message
+                    };
+                }
                 
                 if (exam == null)
                 {
                     return new ExamUploadResult
                     {
                         Success = false,
-                        Message = "Invalid exam file format"
+                        Message = "Invalid exam file format or empty exam object"
                     };
                 }
 
                 // Set the user ID
                 exam.UserId = userId;
                 exam.UploadDate = DateTime.UtcNow;
+                
+                // Log exam details for debugging
+                _logger.LogInformation("Processed exam: Title={title}, Questions={count}", 
+                    exam.ExamTitle, exam.Questions?.Count ?? 0);
 
                 // Add the exam to the database
                 _context.Exams.Add(exam);
