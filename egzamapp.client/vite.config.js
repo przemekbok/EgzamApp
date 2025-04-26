@@ -46,8 +46,14 @@ export default defineConfig({
     },
     server: {
         proxy: {
+            // Updated proxy configuration to handle all API requests
+            '/api': {
+                target: 'http://localhost:5080',
+                changeOrigin: true,
+                secure: false
+            },
             '^/weatherforecast': {
-                target: 'https://localhost:7068/',
+                target: 'http://localhost:5080',
                 secure: false
             }
         },
