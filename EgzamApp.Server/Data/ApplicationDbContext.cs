@@ -53,8 +53,8 @@ namespace EgzamApp.Server.Data
                 entity.Property(q => q.Difficulty).IsRequired(false);
                 entity.Property(q => q.Explanation).IsRequired(false);
                 
-                // Handle the Options collection - requires special configuration
-                entity.Ignore(q => q.Options);
+                // Use the extension method to configure options as JSON
+                entity.ConfigureQuestion();
             });
 
             // Configure UserExam entity
