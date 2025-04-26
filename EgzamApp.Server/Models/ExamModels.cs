@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace EgzamApp.Server.Models
@@ -51,9 +52,9 @@ namespace EgzamApp.Server.Models
         [JsonPropertyName("explanation")]
         public string Explanation { get; set; } = string.Empty;
         
-        // Renamed from ExternalId to QuestionId to better reflect its purpose
-        // This is the "id" from the JSON file
+        // Map to the existing ExternalId column in the database
         [JsonPropertyName("id")]
+        [Column("ExternalId")]
         public int QuestionId { get; set; }
         
         [JsonIgnore]
