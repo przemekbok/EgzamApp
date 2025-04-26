@@ -1,8 +1,7 @@
-using EgzamApp.Server;
 using EgzamApp.Server.Data;
 using EgzamApp.Server.Services;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json.Serialization;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,20 +12,25 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Register our custom services
 builder.Services.AddScoped<ExamService>();
 
-// Improve JSON serialization with Enum conversion
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-    });
-
+builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 
-// Use the custom Swagger configuration
-builder.Services.ConfigureSwagger();
+// Configure Swagger to handle file uploads properly
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "EgzamApp API", Version = "v1" });
+    
+    // Add support for file uploads in Swagger
+    c.OperationFilter<Swashbuckle.AspNetCore.SwaggerGen.FileUploadOperationFilter>();
+    
+    // Define security scheme for file uploads
+    c.AddSecurityDefinition("multipart/form-data", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "multipart/form-data"
+    });
+});
 
 var app = builder.Build();
 
@@ -44,6 +48,21 @@ using (var scope = app.Services.CreateScope())
         // This will create the database if it doesn't exist
         context.Database.EnsureCreated();
         
+        // Check if tables exist and create schema
+        if (!context.Database.CanConnect())
+        {
+            logger.LogWarning("Cannot connect to database. Creating one...");
+            context.Database.EnsureCreated();
+        }
+        
+        // Manually ensure tables are created based on our models
+        if (!context.Exams.Any() && !TableExists(context, "Exams"))
+        {
+            logger.LogInformation("Creating database schema...");
+            context.Database.EnsureDeleted(); // Optional: remove any old DB
+            context.Database.EnsureCreated(); // Create fresh schema
+        }
+        
         logger.LogInformation("Database initialization complete.");
     }
     catch (Exception ex)
@@ -58,53 +77,82 @@ app.UseStaticFiles();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    try 
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
     {
-        app.UseSwagger(c =>
-        {
-            c.SerializeAsV2 = false;
-            c.RouteTemplate = "swagger/{documentName}/swagger.json";
-        });
-        
-        app.UseSwaggerUI(c =>
-        {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "EgzamApp API v1");
-            c.RoutePrefix = "swagger";
-            c.DisplayRequestDuration();
-            c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
-        });
-    }
-    catch (Exception ex)
-    {
-        var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Error configuring Swagger");
-    }
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EgzamApp API v1");
+        c.RoutePrefix = "swagger";
+    });
 }
 
-// Add error handling middleware
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        context.Response.StatusCode = 500;
-        context.Response.ContentType = "application/json";
-        var exceptionHandlerPathFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
-        
-        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogError(exceptionHandlerPathFeature?.Error, "Unhandled exception");
-        
-        await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
-        {
-            StatusCode = context.Response.StatusCode,
-            Message = "An unexpected error occurred",
-            Path = exceptionHandlerPathFeature?.Path
-        }));
-    });
-});
-
 app.UseHttpsRedirection();
+
 app.UseAuthorization();
+
 app.MapControllers();
+
 app.MapFallbackToFile("/index.html");
 
 app.Run();
+
+// Helper method to check if a table exists
+bool TableExists(ApplicationDbContext context, string tableName)
+{
+    try
+    {
+        // Try to query the table
+        var conn = context.Database.GetDbConnection();
+        using var command = conn.CreateCommand();
+        command.CommandText = $"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{tableName}';";
+        
+        if (conn.State != System.Data.ConnectionState.Open)
+            conn.Open();
+            
+        using var reader = command.ExecuteReader();
+        return reader.HasRows;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+// File upload operation filter for Swagger
+namespace Swashbuckle.AspNetCore.SwaggerGen
+{
+    public class FileUploadOperationFilter : IOperationFilter
+    {
+        public void Apply(OpenApiOperation operation, OperationFilterContext context)
+        {
+            var fileParameters = context.MethodInfo.GetParameters()
+                .Where(p => p.ParameterType == typeof(IFormFile) || p.ParameterType == typeof(IFormFileCollection))
+                .ToList();
+
+            if (fileParameters.Any())
+            {
+                // If the operation has file parameters, set the proper content type
+                operation.RequestBody = new OpenApiRequestBody
+                {
+                    Content = new Dictionary<string, OpenApiMediaType>
+                    {
+                        ["multipart/form-data"] = new OpenApiMediaType
+                        {
+                            Schema = new OpenApiSchema
+                            {
+                                Type = "object",
+                                Properties = fileParameters.ToDictionary(
+                                    param => param.Name ?? "file",
+                                    param => new OpenApiSchema
+                                    {
+                                        Type = "string",
+                                        Format = "binary"
+                                    }
+                                )
+                            }
+                        }
+                    }
+                };
+            }
+        }
+    }
+}
