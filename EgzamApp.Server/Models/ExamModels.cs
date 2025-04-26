@@ -29,10 +29,11 @@ namespace EgzamApp.Server.Models
 
     public class Question
     {
+        // This is the database Id (not serialized from JSON)
+        [JsonIgnore]
         public int Id { get; set; }
         
         [JsonPropertyName("question")]
-        [JsonPropertyOrder(1)]
         public string QuestionText { get; set; } = string.Empty;
         
         [JsonPropertyName("type")]
@@ -50,8 +51,8 @@ namespace EgzamApp.Server.Models
         [JsonPropertyName("explanation")]
         public string Explanation { get; set; } = string.Empty;
         
+        // This is the "id" from the JSON file (mapped to database Id after deserialization)
         [JsonPropertyName("id")]
-        [JsonPropertyOrder(0)]
         public int ExternalId { get; set; }
         
         [JsonIgnore]
