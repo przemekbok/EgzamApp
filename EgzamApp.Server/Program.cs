@@ -1,7 +1,7 @@
+using EgzamApp.Server;
 using EgzamApp.Server.Data;
 using EgzamApp.Server.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,22 +25,8 @@ builder.Services.AddControllers()
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 
-// Add Swagger with more robust error handling
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { 
-        Title = "EgzamApp API", 
-        Version = "v1",
-        Description = "API for the EgzamApp exam application"
-    });
-    
-    // Explicitly exclude schema for Options property which is a List<string>
-    // This can sometimes cause issues with Swagger
-    c.SchemaFilter<OptionSchemaFilter>();
-    
-    // Add better error handling
-    c.CustomSchemaIds(type => type.FullName);
-});
+// Use the custom Swagger configuration
+builder.Services.ConfigureSwagger();
 
 var app = builder.Build();
 
@@ -77,12 +63,22 @@ if (app.Environment.IsDevelopment())
         app.UseSwagger(c =>
         {
             c.SerializeAsV2 = false;
+            // Add more logging
+            c.RouteTemplate = "swagger/{documentName}/swagger.json";
+            // Don't fail if OpenAPI doc cannot be generated
+            c.PreSerializeFilters.Add((doc, req) =>
+            {
+                var logger = app.Services.GetRequiredService<ILogger<Program>>();
+                logger.LogInformation("Generating Swagger documentation for {RouteTemplate}", req.Path);
+            });
         });
         
         app.UseSwaggerUI(c =>
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "EgzamApp API v1");
             c.RoutePrefix = "swagger";
+            c.DisplayRequestDuration();
+            c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
         });
     }
     catch (Exception ex)
@@ -92,25 +88,30 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+// Add error handling middleware
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        var exceptionHandlerPathFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(exceptionHandlerPathFeature?.Error, "Unhandled exception");
+        
+        await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            StatusCode = context.Response.StatusCode,
+            Message = "An unexpected error occurred",
+            Path = exceptionHandlerPathFeature?.Path
+        }));
+    });
+});
+
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.MapFallbackToFile("/index.html");
 
 app.Run();
-
-// Schema filter to handle Options property
-public class OptionSchemaFilter : Swashbuckle.AspNetCore.SwaggerGen.ISchemaFilter
-{
-    public void Apply(Microsoft.OpenApi.Models.OpenApiSchema schema, Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext context)
-    {
-        if (context.Type == typeof(List<string>))
-        {
-            schema.Type = "array";
-            schema.Items = new OpenApiSchema { Type = "string" };
-        }
-    }
-}
