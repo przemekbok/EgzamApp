@@ -1,0 +1,6 @@
+@EgzamApp.Server_HostAddress = http://localhost:5080
+
+GET {{EgzamApp.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
