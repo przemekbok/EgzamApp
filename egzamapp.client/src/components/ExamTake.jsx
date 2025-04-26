@@ -21,8 +21,19 @@ function ExamTake() {
     const fetchExam = async () => {
       try {
         const data = await getExam(id);
-        setExam(data);
-        setError('');
+        console.log("Exam data:", data); // Debug log
+        
+        // Make sure exam has the required properties
+        if (data && typeof data === 'object') {
+          // Ensure questions is an array
+          if (!Array.isArray(data.questions)) {
+            data.questions = [];
+          }
+          setExam(data);
+          setError('');
+        } else {
+          setError('Invalid exam data received');
+        }
       } catch (err) {
         setError('Failed to load exam details. Please try again later.');
         console.error('Error fetching exam:', err);
@@ -61,7 +72,7 @@ function ExamTake() {
       setExamStarted(true);
       
       // Parse time limit (e.g., "120 minutes" to seconds)
-      const timeMatch = exam.timeLimit.match(/(\d+)\s*minutes?/i);
+      const timeMatch = exam.timeLimit?.match(/(\d+)\s*minutes?/i);
       const minutes = timeMatch ? parseInt(timeMatch[1]) : 60;
       setTimeLeft(minutes * 60);
       
@@ -80,7 +91,7 @@ function ExamTake() {
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestion < exam.questions.length - 1) {
+    if (currentQuestion < (exam?.questions?.length || 0) - 1) {
       setCurrentQuestion(currentQuestion + 1);
     }
   };
@@ -96,10 +107,13 @@ function ExamTake() {
       setIsLoading(true);
       
       // Format answers for submission
-      const formattedAnswers = Object.keys(answers).map(questionIdx => ({
-        questionId: exam.questions[questionIdx].id,
-        selectedAnswer: answers[questionIdx]
-      }));
+      const formattedAnswers = Object.keys(answers).map(questionIdx => {
+        const questionIndex = parseInt(questionIdx);
+        return {
+          questionId: exam.questions[questionIndex]?.id || 0,
+          selectedAnswer: answers[questionIdx]
+        };
+      });
       
       const submissionResult = await submitExam(userExam.id, formattedAnswers);
       setResult(submissionResult);
@@ -162,7 +176,7 @@ function ExamTake() {
         <p>{exam.examDescription}</p>
         
         <div className="exam-info">
-          <p><strong>Questions:</strong> {exam.questions.length}</p>
+          <p><strong>Questions:</strong> {exam.questions?.length || 0}</p>
           <p><strong>Passing Score:</strong> {exam.passingScore}%</p>
           <p><strong>Time Limit:</strong> {exam.timeLimit}</p>
         </div>
@@ -184,9 +198,41 @@ function ExamTake() {
     );
   }
 
+  // Safety check for exam questions
+  if (!Array.isArray(exam.questions) || exam.questions.length === 0) {
+    return (
+      <div className="error-message">
+        <h2>Error: No Questions Available</h2>
+        <p>This exam doesn't have any questions or the question data is invalid.</p>
+        <button 
+          onClick={() => navigate('/exams')}
+          className="button"
+        >
+          Back to Exams
+        </button>
+      </div>
+    );
+  }
+
   // Current question being displayed
   const question = exam.questions[currentQuestion];
   const selectedAnswer = answers[currentQuestion];
+
+  // Check if the current question exists and has required properties
+  if (!question || !Array.isArray(question.options)) {
+    return (
+      <div className="error-message">
+        <h2>Error: Invalid Question</h2>
+        <p>The current question data is invalid or incomplete.</p>
+        <button 
+          onClick={() => navigate('/exams')}
+          className="button"
+        >
+          Back to Exams
+        </button>
+      </div>
+    );
+  }
 
   // Exam taking view
   return (
