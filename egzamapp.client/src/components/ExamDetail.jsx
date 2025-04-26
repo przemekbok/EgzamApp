@@ -13,8 +13,19 @@ function ExamDetail() {
       try {
         setIsLoading(true);
         const data = await getExam(id);
-        setExam(data);
-        setError('');
+        console.log("Exam detail data:", data); // Debug log
+        
+        // Make sure data is valid
+        if (data && typeof data === 'object') {
+          // Ensure questions is an array
+          if (!Array.isArray(data.questions)) {
+            data.questions = [];
+          }
+          setExam(data);
+          setError('');
+        } else {
+          setError('Invalid exam data received');
+        }
       } catch (err) {
         setError('Failed to load exam details. Please try again later.');
         console.error('Error fetching exam:', err);
@@ -46,7 +57,7 @@ function ExamDetail() {
       <div className="exam-meta">
         <div className="meta-item">
           <span className="meta-label">Questions:</span>
-          <span className="meta-value">{exam.questions.length}</span>
+          <span className="meta-value">{exam.questions?.length || 0}</span>
         </div>
         <div className="meta-item">
           <span className="meta-label">Passing Score:</span>
@@ -58,7 +69,9 @@ function ExamDetail() {
         </div>
         <div className="meta-item">
           <span className="meta-label">Upload Date:</span>
-          <span className="meta-value">{new Date(exam.uploadDate).toLocaleDateString()}</span>
+          <span className="meta-value">
+            {exam.uploadDate ? new Date(exam.uploadDate).toLocaleDateString() : 'N/A'}
+          </span>
         </div>
       </div>
       
@@ -77,16 +90,20 @@ function ExamDetail() {
           Note: This is just a preview. Questions will be presented one at a time during the actual exam.
         </p>
         
-        {exam.questions.map((question, index) => (
-          <div key={index} className="question-preview">
-            <h4>Question {index + 1}</h4>
-            <p className="question-text">{question.questionText}</p>
-            <div className="question-meta">
-              <span className="difficulty">Difficulty: {question.difficulty}</span>
-              <span className="type">Type: {question.type}</span>
+        {Array.isArray(exam.questions) && exam.questions.length > 0 ? (
+          exam.questions.map((question, index) => (
+            <div key={index} className="question-preview">
+              <h4>Question {index + 1}</h4>
+              <p className="question-text">{question.questionText}</p>
+              <div className="question-meta">
+                <span className="difficulty">Difficulty: {question.difficulty || 'N/A'}</span>
+                <span className="type">Type: {question.type || 'N/A'}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p>No questions available for this exam.</p>
+        )}
       </div>
     </div>
   );
