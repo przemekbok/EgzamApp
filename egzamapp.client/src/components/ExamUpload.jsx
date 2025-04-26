@@ -6,15 +6,22 @@ function ExamUpload() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [detailedError, setDetailedError] = useState('');
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    if (selectedFile && selectedFile.type === 'application/json') {
+    if (selectedFile) {
+      // Accept any file extension but warn if not JSON
+      if (selectedFile.type !== 'application/json') {
+        setError('Warning: The file selected is not a JSON file. Upload may fail.');
+      } else {
+        setError('');
+      }
       setFile(selectedFile);
-      setError('');
+      setDetailedError('');
     } else {
       setFile(null);
-      setError('Please select a valid JSON file');
+      setError('No file selected');
     }
   };
 
@@ -29,14 +36,40 @@ function ExamUpload() {
       setIsLoading(true);
       setMessage('');
       setError('');
+      setDetailedError('');
 
+      console.log('Uploading file:', file.name, file.type, file.size);
+      
       const result = await uploadExam(file);
-      setMessage(`Exam "${result.exam.examTitle}" uploaded successfully!`);
-      setFile(null);
-      // Reset the file input
-      e.target.reset();
+      
+      if (result && result.exam) {
+        setMessage(`Exam "${result.exam.examTitle}" uploaded successfully!`);
+        setFile(null);
+        // Reset the file input
+        e.target.reset();
+      } else {
+        setError('Upload successful but received unexpected response format');
+        setDetailedError(JSON.stringify(result, null, 2));
+      }
     } catch (error) {
-      setError(error.response?.data || 'Error uploading exam');
+      console.error('Upload error details:', error);
+      
+      // Improved error handling
+      let errorMsg = 'Error uploading exam';
+      
+      if (error.response) {
+        // The server responded with a status code outside the 2xx range
+        errorMsg = `Server Error (${error.response.status}): ${error.response.data || error.response.statusText}`;
+        setDetailedError(JSON.stringify(error.response, null, 2));
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMsg = 'No response from server. Please check your network connection or API availability.';
+      } else {
+        // Something else happened while setting up the request
+        errorMsg = `Error: ${error.message}`;
+      }
+      
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +93,14 @@ function ExamUpload() {
         </div>
         
         {error && <div className="error-message">{error}</div>}
+        {detailedError && (
+          <div className="detailed-error">
+            <details>
+              <summary>Error Details</summary>
+              <pre>{detailedError}</pre>
+            </details>
+          </div>
+        )}
         {message && <div className="success-message">{message}</div>}
         
         <button 
