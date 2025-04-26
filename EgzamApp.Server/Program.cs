@@ -18,11 +18,41 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Apply database migrations
+// Apply database migrations with improved error handling
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    context.Database.Migrate();
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    
+    try
+    {
+        logger.LogInformation("Initializing database...");
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        
+        // This will create the database if it doesn't exist
+        context.Database.EnsureCreated();
+        
+        // Check if tables exist and create schema
+        if (!context.Database.CanConnect())
+        {
+            logger.LogWarning("Cannot connect to database. Creating one...");
+            context.Database.EnsureCreated();
+        }
+        
+        // Manually ensure tables are created based on our models
+        if (!context.Exams.Any() && !TableExists(context, "Exams"))
+        {
+            logger.LogInformation("Creating database schema...");
+            context.Database.EnsureDeleted(); // Optional: remove any old DB
+            context.Database.EnsureCreated(); // Create fresh schema
+        }
+        
+        logger.LogInformation("Database initialization complete.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while initializing the database.");
+    }
 }
 
 app.UseDefaultFiles();
@@ -44,3 +74,25 @@ app.MapControllers();
 app.MapFallbackToFile("/index.html");
 
 app.Run();
+
+// Helper method to check if a table exists
+bool TableExists(ApplicationDbContext context, string tableName)
+{
+    try
+    {
+        // Try to query the table
+        var conn = context.Database.GetDbConnection();
+        using var command = conn.CreateCommand();
+        command.CommandText = $"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{tableName}';";
+        
+        if (conn.State != System.Data.ConnectionState.Open)
+            conn.Open();
+            
+        using var reader = command.ExecuteReader();
+        return reader.HasRows;
+    }
+    catch
+    {
+        return false;
+    }
+}
