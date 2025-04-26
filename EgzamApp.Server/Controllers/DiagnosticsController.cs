@@ -1,4 +1,7 @@
+using System.Text;
+using System.Text.Json;
 using EgzamApp.Server.Data;
+using EgzamApp.Server.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -53,6 +56,90 @@ namespace EgzamApp.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error initializing database");
+                return StatusCode(500, new { Error = ex.Message, StackTrace = ex.StackTrace });
+            }
+        }
+
+        [HttpPost("test-json")]
+        public IActionResult TestJsonDeserialization([FromForm] IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest("No file uploaded");
+                }
+
+                using var stream = file.OpenReadStream();
+                using var reader = new StreamReader(stream);
+                string json = reader.ReadToEnd();
+
+                // Try to deserialize with different options
+                var results = new List<object>();
+
+                // Test case-insensitive deserialization
+                try
+                {
+                    var options1 = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+                    var exam1 = JsonSerializer.Deserialize<Exam>(json, options1);
+                    results.Add(new { Method = "Case-insensitive", Success = true, Title = exam1?.ExamTitle, QuestionCount = exam1?.Questions?.Count });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new { Method = "Case-insensitive", Success = false, Error = ex.Message });
+                }
+
+                // Test with JsonPropertyName attributes
+                try
+                {
+                    var options2 = new JsonSerializerOptions();
+                    var exam2 = JsonSerializer.Deserialize<Exam>(json, options2);
+                    results.Add(new { Method = "With JsonPropertyName", Success = true, Title = exam2?.ExamTitle, QuestionCount = exam2?.Questions?.Count });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new { Method = "With JsonPropertyName", Success = false, Error = ex.Message });
+                }
+
+                // Test with manual dynamic parsing
+                try
+                {
+                    var dynamicJson = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+                    var hasTitleProperty = dynamicJson?.ContainsKey("examTitle") ?? false;
+                    var hasQuestionsProperty = dynamicJson?.ContainsKey("questions") ?? false;
+                    
+                    results.Add(new
+                    {
+                        Method = "Dynamic parsing",
+                        Success = true,
+                        Properties = dynamicJson?.Keys.ToList(),
+                        HasExamTitle = hasTitleProperty,
+                        HasQuestions = hasQuestionsProperty
+                    });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new { Method = "Dynamic parsing", Success = false, Error = ex.Message });
+                }
+
+                return Ok(new
+                {
+                    FileInfo = new
+                    {
+                        Name = file.FileName,
+                        Size = file.Length,
+                        ContentType = file.ContentType
+                    },
+                    JsonPreview = json.Length > 500 ? json.Substring(0, 500) + "..." : json,
+                    DeserializationResults = results
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error testing JSON deserialization");
                 return StatusCode(500, new { Error = ex.Message, StackTrace = ex.StackTrace });
             }
         }
