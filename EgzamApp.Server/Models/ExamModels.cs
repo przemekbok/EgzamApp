@@ -51,9 +51,10 @@ namespace EgzamApp.Server.Models
         [JsonPropertyName("explanation")]
         public string Explanation { get; set; } = string.Empty;
         
-        // This is the "id" from the JSON file (mapped to database Id after deserialization)
+        // Renamed from ExternalId to QuestionId to better reflect its purpose
+        // This is the "id" from the JSON file
         [JsonPropertyName("id")]
-        public int ExternalId { get; set; }
+        public int QuestionId { get; set; }
         
         [JsonIgnore]
         public int? ExamId { get; set; }
