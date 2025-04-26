@@ -4,6 +4,8 @@ using EgzamApp.Server.Data;
 using EgzamApp.Server.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace EgzamApp.Server.Controllers
 {
@@ -21,6 +23,12 @@ namespace EgzamApp.Server.Controllers
         }
 
         [HttpGet("db-status")]
+        [SwaggerOperation(
+            Summary = "Gets the database connection status and table information",
+            Description = "Returns information about the database connection and existing tables"
+        )]
+        [SwaggerResponse(200, "Database status retrieved successfully")]
+        [SwaggerResponse(500, "Server error")]
         public IActionResult GetDatabaseStatus()
         {
             try
@@ -43,6 +51,12 @@ namespace EgzamApp.Server.Controllers
         }
 
         [HttpPost("initialize")]
+        [SwaggerOperation(
+            Summary = "Initializes or resets the database",
+            Description = "Deletes the existing database and recreates it with the proper schema"
+        )]
+        [SwaggerResponse(200, "Database initialized successfully")]
+        [SwaggerResponse(500, "Server error")]
         public async Task<IActionResult> InitializeDatabase()
         {
             try
@@ -61,7 +75,16 @@ namespace EgzamApp.Server.Controllers
         }
 
         [HttpPost("test-json")]
-        public IActionResult TestJsonDeserialization([FromForm] IFormFile file)
+        [SwaggerOperation(
+            Summary = "Tests JSON deserialization with a file upload",
+            Description = "Upload a JSON file to test deserialization with different options"
+        )]
+        [SwaggerResponse(200, "JSON file tested successfully")]
+        [SwaggerResponse(400, "No file uploaded or invalid request")]
+        [SwaggerResponse(500, "Server error")]
+        [Consumes("multipart/form-data")]
+        public IActionResult TestJsonDeserialization(
+            [SwaggerParameter(Description = "JSON file to test")] IFormFile file)
         {
             try
             {
@@ -179,5 +202,11 @@ namespace EgzamApp.Server.Controllers
                     conn.Close();
             }
         }
+    }
+
+    // Add this class to help Swagger understand the file upload
+    public class FileUploadModel
+    {
+        public IFormFile File { get; set; }
     }
 }
