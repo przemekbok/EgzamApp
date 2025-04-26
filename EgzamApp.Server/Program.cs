@@ -1,6 +1,8 @@
 using EgzamApp.Server.Data;
 using EgzamApp.Server.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,10 +13,34 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Register our custom services
 builder.Services.AddScoped<ExamService>();
 
-builder.Services.AddControllers();
+// Improve JSON serialization with Enum conversion
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Add Swagger with more robust error handling
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { 
+        Title = "EgzamApp API", 
+        Version = "v1",
+        Description = "API for the EgzamApp exam application"
+    });
+    
+    // Explicitly exclude schema for Options property which is a List<string>
+    // This can sometimes cause issues with Swagger
+    c.SchemaFilter<OptionSchemaFilter>();
+    
+    // Add better error handling
+    c.CustomSchemaIds(type => type.FullName);
+});
 
 var app = builder.Build();
 
@@ -32,21 +58,6 @@ using (var scope = app.Services.CreateScope())
         // This will create the database if it doesn't exist
         context.Database.EnsureCreated();
         
-        // Check if tables exist and create schema
-        if (!context.Database.CanConnect())
-        {
-            logger.LogWarning("Cannot connect to database. Creating one...");
-            context.Database.EnsureCreated();
-        }
-        
-        // Manually ensure tables are created based on our models
-        if (!context.Exams.Any() && !TableExists(context, "Exams"))
-        {
-            logger.LogInformation("Creating database schema...");
-            context.Database.EnsureDeleted(); // Optional: remove any old DB
-            context.Database.EnsureCreated(); // Create fresh schema
-        }
-        
         logger.LogInformation("Database initialization complete.");
     }
     catch (Exception ex)
@@ -61,8 +72,24 @@ app.UseStaticFiles();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    try 
+    {
+        app.UseSwagger(c =>
+        {
+            c.SerializeAsV2 = false;
+        });
+        
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "EgzamApp API v1");
+            c.RoutePrefix = "swagger";
+        });
+    }
+    catch (Exception ex)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Error configuring Swagger");
+    }
 }
 
 app.UseHttpsRedirection();
@@ -75,24 +102,15 @@ app.MapFallbackToFile("/index.html");
 
 app.Run();
 
-// Helper method to check if a table exists
-bool TableExists(ApplicationDbContext context, string tableName)
+// Schema filter to handle Options property
+public class OptionSchemaFilter : Swashbuckle.AspNetCore.SwaggerGen.ISchemaFilter
 {
-    try
+    public void Apply(Microsoft.OpenApi.Models.OpenApiSchema schema, Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext context)
     {
-        // Try to query the table
-        var conn = context.Database.GetDbConnection();
-        using var command = conn.CreateCommand();
-        command.CommandText = $"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{tableName}';";
-        
-        if (conn.State != System.Data.ConnectionState.Open)
-            conn.Open();
-            
-        using var reader = command.ExecuteReader();
-        return reader.HasRows;
-    }
-    catch
-    {
-        return false;
+        if (context.Type == typeof(List<string>))
+        {
+            schema.Type = "array";
+            schema.Items = new OpenApiSchema { Type = "string" };
+        }
     }
 }
