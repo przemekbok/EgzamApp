@@ -36,6 +36,9 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
     }
 }
 
+// Define the backend URL - important to keep consistent
+const BACKEND_URL = 'https://localhost:7068';
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [plugin()],
@@ -46,8 +49,14 @@ export default defineConfig({
     },
     server: {
         proxy: {
+            // Updated proxy configuration to handle all API requests consistently
+            '/api': {
+                target: BACKEND_URL,
+                changeOrigin: true,
+                secure: false
+            },
             '^/weatherforecast': {
-                target: 'https://localhost:7068/',
+                target: BACKEND_URL,
                 secure: false
             }
         },
