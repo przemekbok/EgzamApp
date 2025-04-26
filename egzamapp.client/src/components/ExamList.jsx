@@ -12,7 +12,11 @@ function ExamList() {
       try {
         setIsLoading(true);
         const data = await getExams();
-        setExams(data);
+        console.log("API response:", data); // Debug response
+        
+        // Ensure we have an array to work with
+        const examArray = Array.isArray(data) ? data : [];
+        setExams(examArray);
         setError('');
       } catch (err) {
         setError('Failed to load exams. Please try again later.');
@@ -33,7 +37,7 @@ function ExamList() {
     return <div className="error-message">{error}</div>;
   }
 
-  if (exams.length === 0) {
+  if (!Array.isArray(exams) || exams.length === 0) {
     return (
       <div className="exam-list-empty">
         <h2>My Exams</h2>
@@ -52,7 +56,7 @@ function ExamList() {
             <h3>{exam.examTitle}</h3>
             <p>{exam.examDescription}</p>
             <div className="exam-meta">
-              <span>Questions: {exam.questions.length}</span>
+              <span>Questions: {exam.questions?.length || 0}</span>
               <span>Passing Score: {exam.passingScore}%</span>
               <span>Time Limit: {exam.timeLimit}</span>
             </div>
