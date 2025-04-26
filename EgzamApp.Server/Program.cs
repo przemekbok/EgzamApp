@@ -63,14 +63,7 @@ if (app.Environment.IsDevelopment())
         app.UseSwagger(c =>
         {
             c.SerializeAsV2 = false;
-            // Add more logging
             c.RouteTemplate = "swagger/{documentName}/swagger.json";
-            // Don't fail if OpenAPI doc cannot be generated
-            c.PreSerializeFilters.Add((doc, req) =>
-            {
-                var logger = app.Services.GetRequiredService<ILogger<Program>>();
-                logger.LogInformation("Generating Swagger documentation for {RouteTemplate}", req.Path);
-            });
         });
         
         app.UseSwaggerUI(c =>
